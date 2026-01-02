@@ -1,10 +1,13 @@
+import os
 import csv
 import requests
 from datetime import datetime , timedelta
 
 def gather_earthquakes(days):
     bounding_box =  {}
-    with open ("bounding_box.csv" , mode ='r' ) as file:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    CSV_PATH = os.path.join(BASE_DIR, "..","..","..","bounding_box.csv")
+    with open(CSV_PATH, mode="r") as file:
         reader = csv.DictReader(file)
         for row in reader:
             key = row["key"]
@@ -15,8 +18,8 @@ def gather_earthquakes(days):
     end_time = datetime.utcnow()
     start_time = end_time - timedelta(days=days)
     url = "https://webservices.ingv.it/fdsnws/event/1/query"
-    params = {
-        "format": "geoJson",
+    params= {
+        "format": "geojson",
         "starttime": str(start_time.date()),
         "endtime": str(end_time.date()),
         "minlatitude": bounding_box["minlatitude"],
@@ -26,6 +29,9 @@ def gather_earthquakes(days):
     }
 
     response = requests.get(url, params=params)
+    print("Status code:", response.status_code)
+    print("Response preview:", response.text[:200])
+
     data = response.json()
     events = data["features"]
     earthquake = []
@@ -46,4 +52,3 @@ def gather_earthquakes(days):
         quake_tuple = ( day , time_str , mag , latitude , longitude , place)
         earthquake.append(quake_tuple)
     return earthquake
-
