@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timedelta
 from .FetchINGV import gather_earthquakes
 
 
@@ -36,3 +37,48 @@ def create_earthquake_db(days):
     # 5. Close the connection
     conn.commit()
     conn.close()
+
+
+def query_db(K, days, min_magnitude):
+    """
+    Queries the database for the K strongest earthquakes within the last 'days'
+    with a magnitude of at least 'min_magnitude'.
+    """
+    conn = sqlite3.connect('earthquakes.db')
+    cursor = conn.cursor()
+
+    # Calculate the cutoff date (current time - days)
+    cutoff_date = datetime.utcnow() - timedelta(days=int(days))
+    cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+    # SQL Query:
+    # 1. Filter by magnitude and date
+    # 2. Order by magnitude DESC (strongest first)
+    # 3. Limit to K results
+    query = """
+            SELECT day, time, mag, latitude, longitude, place
+            FROM earthquakes_db
+            WHERE mag >= ? AND day >= ?
+            ORDER BY mag DESC
+                LIMIT ? \
+            """
+
+    # Execute safely using parameters
+    cursor.execute(query, (float(min_magnitude), cutoff_str, int(K)))
+
+    results = cursor.fetchall()
+    conn.close()
+
+    return results
+
+
+def print_earthquakes(earthquakes):
+    # 'earthquakes' è la lista di tuple restituita da query_db() [cite: 103, 106]
+    for eq in earthquakes:
+        # Estraiamo i dati dalla tupla in base all'ordine della query [cite: 95, 103]
+        day, time, magnitude, latitude, longitude, place = eq
+
+        # Stampiamo seguendo il formato esatto richiesto dal manuale
+        print(f"day: {day}, time: {time}, magnitude: {magnitude},")
+        print(f"lat: {latitude}, lon: {longitude}, place: {place}")
+
