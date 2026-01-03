@@ -3,7 +3,6 @@ import requests
 from datetime import datetime, timedelta
 import os
 
-
 def gather_earthquakes(days):
     bounding_box = {}
 
@@ -11,6 +10,7 @@ def gather_earthquakes(days):
     script_dir = os.path.dirname(__file__)
     file_path = os.path.join(script_dir, 'bounding_box.csv')
 
+    # You can keep comments like this, they are helpful!
     with open(file_path, mode='r') as file:
         reader = csv.DictReader(file)
         for row in reader:
@@ -25,7 +25,7 @@ def gather_earthquakes(days):
     url = "https://webservices.ingv.it/fdsnws/event/1/query"
 
     params = {
-        "format": "geojson",   # ✅ MUST be geojson
+        "format": "geojson",
         "starttime": start_time.strftime("%Y-%m-%d"),
         "endtime": end_time.strftime("%Y-%m-%d"),
         "minlatitude": bounding_box["minlatitude"],
@@ -35,25 +35,19 @@ def gather_earthquakes(days):
     }
 
     # 3. REQUEST THE DATA
+    # (Debug prints removed here for final submission)
     response = requests.get(url, params=params)
-    print("DEBUG URL:", response.url)
-    print("CONTENT TYPE:", response.headers.get("Content-Type"))
 
     if response.status_code != 200:
-        print("!!! ERROR FROM SERVER !!!")
-        print("Status Code:", response.status_code)
-        print("Message:", response.text[:300])
         return []
 
     # 4. PARSE DATA
     try:
         data = response.json()
     except Exception:
-        print("!!! FAILED TO READ JSON !!!")
-        print("Server sent:", response.text[:300])
         return []
 
-    events = data["features"]
+    events = data.get("features", [])
     earthquakes = []
 
     # 5. EXTRACT DATA
@@ -66,9 +60,9 @@ def gather_earthquakes(days):
         # Case 1: timestamp is milliseconds (number)
         if isinstance(timestamp, (int, float)):
             dt = datetime.utcfromtimestamp(timestamp / 1000)
-
         # Case 2: timestamp is ISO string
         else:
+            # removing Z to ensure format matches
             dt = datetime.fromisoformat(timestamp.replace("Z", ""))
 
         day = dt.strftime("%Y-%m-%d")
