@@ -1,49 +1,85 @@
 import csv
 import requests
-from datetime import datetime , timedelta
+from datetime import datetime, timedelta
+import os
+
 
 def gather_earthquakes(days):
-    bounding_box =  {}
-    with open ("bounding_box.csv" , mode ='r' ) as file:
+    bounding_box = {}
+
+    # 1. READ THE CSV SAFELY
+    script_dir = os.path.dirname(__file__)
+    file_path = os.path.join(script_dir, 'bounding_box.csv')
+
+    with open(file_path, mode='r') as file:
         reader = csv.DictReader(file)
         for row in reader:
             key = row["key"]
-            value = float (row["value"])
+            value = float(row["value"])
             bounding_box[key] = value
 
-
+    # 2. PREPARE THE QUERY
     end_time = datetime.utcnow()
     start_time = end_time - timedelta(days=days)
+
     url = "https://webservices.ingv.it/fdsnws/event/1/query"
+
     params = {
-        "format": "geoJson",
-        "starttime": str(start_time.date()),
-        "endtime": str(end_time.date()),
+        "format": "geojson",   # ✅ MUST be geojson
+        "starttime": start_time.strftime("%Y-%m-%d"),
+        "endtime": end_time.strftime("%Y-%m-%d"),
         "minlatitude": bounding_box["minlatitude"],
         "maxlatitude": bounding_box["maxlatitude"],
         "minlongitude": bounding_box["minlongitude"],
         "maxlongitude": bounding_box["maxlongitude"],
     }
 
+    # 3. REQUEST THE DATA
     response = requests.get(url, params=params)
-    data = response.json()
-    events = data["features"]
-    earthquake = []
-    for event in events:
-        props = event['properties']
-        geom = event['geometry']
+    print("DEBUG URL:", response.url)
+    print("CONTENT TYPE:", response.headers.get("Content-Type"))
 
-        timestamp_ms = props["time"]                 
-        dt = datetime.utcfromtimestamp(timestamp_ms / 1000.0) 
-        day = str(dt.date())
-        time_str = str(dt.time()).split(".")[0]
+    if response.status_code != 200:
+        print("!!! ERROR FROM SERVER !!!")
+        print("Status Code:", response.status_code)
+        print("Message:", response.text[:300])
+        return []
+
+    # 4. PARSE DATA
+    try:
+        data = response.json()
+    except Exception:
+        print("!!! FAILED TO READ JSON !!!")
+        print("Server sent:", response.text[:300])
+        return []
+
+    events = data["features"]
+    earthquakes = []
+
+    # 5. EXTRACT DATA
+    for event in events:
+        props = event["properties"]
+        geom = event["geometry"]
+
+        timestamp = props["time"]
+
+        # Case 1: timestamp is milliseconds (number)
+        if isinstance(timestamp, (int, float)):
+            dt = datetime.utcfromtimestamp(timestamp / 1000)
+
+        # Case 2: timestamp is ISO string
+        else:
+            dt = datetime.fromisoformat(timestamp.replace("Z", ""))
+
+        day = dt.strftime("%Y-%m-%d")
+        time_str = dt.strftime("%H:%M:%S")
 
         mag = props["mag"]
         place = props["place"]
         longitude = geom["coordinates"][0]
         latitude = geom["coordinates"][1]
 
-        quake_tuple = ( day , time_str , mag , latitude , longitude , place)
-        earthquake.append(quake_tuple)
-    return earthquake
+        quake_tuple = (day, time_str, mag, latitude, longitude, place)
+        earthquakes.append(quake_tuple)
 
+    return earthquakes
