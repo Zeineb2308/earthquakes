@@ -1,11 +1,10 @@
 import sqlite3
 from datetime import datetime, timedelta
 from .FetchINGV import gather_earthquakes
-
+from earthquake_data.nearby_municipalities import get_closest_municipalities
 
 def create_earthquake_db(days):
-    # 1. Fetch data using the function you made in Point 4
-    # This calls gather_earthquakes and stores the result in 'earthquakes'
+    # Call gather_earthquakes and store the result in 'earthquakes'
     earthquakes = gather_earthquakes(days)
 
     # 2. Open a connection and a cursor to the database 'earthquakes.db'
@@ -41,7 +40,7 @@ def create_earthquake_db(days):
 
 def query_db(K, days, min_magnitude):
     """
-    Queries the database for the K strongest earthquakes within the last 'days'
+    Query the database for the K strongest earthquakes within the last 'days'
     with a magnitude of at least 'min_magnitude'.
     """
     conn = sqlite3.connect('earthquakes.db')
@@ -72,7 +71,7 @@ def query_db(K, days, min_magnitude):
     return results
 
 
-def print_earthquakes(earthquakes):
+def print_earthquakes(earthquakes, show_closest=False):
     # 'earthquakes' è la lista di tuple restituita da query_db() [cite: 103, 106]
     for eq in earthquakes:
         # Estraiamo i dati dalla tupla in base all'ordine della query [cite: 95, 103]
@@ -81,4 +80,11 @@ def print_earthquakes(earthquakes):
         # Stampiamo seguendo il formato esatto richiesto dal manuale
         print(f"day: {day}, time: {time}, magnitude: {magnitude},")
         print(f"lat: {latitude}, lon: {longitude}, place: {place}")
+
+        if show_closest:
+            towns = get_closest_municipalities(eq[3], eq[4])  # eq[3] is lat, eq[4] is lon
+            print("  5 Closest Municipalities:")
+            for name, d in towns:
+                print(f"    - {name}: {d:.2f} km")
+
 

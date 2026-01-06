@@ -3,6 +3,7 @@ import csv
 import sqlite3
 import os
 import sys
+from earthquake_data.nearby_municipalities import calculate_distance
 
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -99,6 +100,10 @@ class TestProject(unittest.TestCase):
         results = query_db(10, 30, 10.0)
         self.assertEqual(len(results), 0, "Querying for magnitude 10.0 should return no results.")
 
+def test_distance():
+    # Distance between Rome and Milan is roughly 477km
+    dist = calculate_distance(41.89, 12.49, 45.46, 9.19)
+    assert 470 < dist < 485
 
 if __name__ == '__main__':
     unittest
