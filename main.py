@@ -1,6 +1,6 @@
 import argparse
 from earthquake_data.db_handler import create_earthquake_db, query_db, print_earthquakes
-create_earthquake_db(30)
+
 
 def main():
     #Step 1: Initialize the parser, which will read the command line inputs
@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--magnitude",
                         type=float,
                         required=True,
-                        help="Minimum strength of the earthquakes allowed , e.g. if 2.5 then the code gets only earthquakes stronger than 2.5 mag.")
+                        help="Minimum strength of the earthquakes allowed")
 
     """
     Step 3: Parse the arguments
@@ -33,7 +33,7 @@ def main():
     The error message should be: "the following arguments are required: --days, --K, --magnitude"
     """
     args = parser.parse_args()
-
+    create_earthquake_db(args.days)
     earthquakes = query_db(args.K, args.days, args.magnitude)
     print_earthquakes(earthquakes)
 
