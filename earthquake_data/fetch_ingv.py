@@ -1,79 +1,93 @@
+"""
+INGV API Fetcher Module.
+
+This module is responsible for retrieving earthquake data from the 
+National Institute of Geophysics and Volcanology (INGV).
+"""
 import csv
 import requests
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+
 
 def gather_earthquakes(days):
+    """
+    Fetches earthquake data from the INGV API for the specified number of days.
+
+    Args:
+        days (int): Number of days in the past to query.
+
+    Returns:
+        list: A list of tuples (day, time, mag, lat, lon, place).
+    """
     bounding_box = {}
 
-    # 1. READ THE CSV SAFELY
-    script_dir = os.path.dirname(__file__)
-    file_path = os.path.join(script_dir, 'bounding_box.csv')
+    # Path handling to find 'bounding_box.csv'
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Look one level up (project root)
+    csv_path = os.path.join(os.path.dirname(current_dir), 'bounding_box.csv')
 
-    # You can keep comments like this, they are helpful!
-    with open(file_path, mode='r') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            key = row["key"]
-            value = float(row["value"])
-            bounding_box[key] = value
+    if not os.path.exists(csv_path):
+        # Fallback to package dir
+        csv_path = os.path.join(current_dir, 'bounding_box.csv')
 
-    # 2. PREPARE THE QUERY
+    try:
+        with open(csv_path, mode='r') as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                bounding_box[row['key']] = float(row['value'])
+    except FileNotFoundError:
+        print(f"Error: 'bounding_box.csv' not found. Please run write_bounding_box.py.")
+        return []
+
+    # Preparing API Request
     end_time = datetime.utcnow()
     start_time = end_time - timedelta(days=days)
-
-    url = "https://webservices.ingv.it/fdsnws/event/1/query"
+    url = "https://webservices.ingv.it/fdsnws/event/1/query?"
 
     params = {
         "format": "geojson",
         "starttime": start_time.strftime("%Y-%m-%d"),
         "endtime": end_time.strftime("%Y-%m-%d"),
-        "minlatitude": bounding_box["minlatitude"],
-        "maxlatitude": bounding_box["maxlatitude"],
-        "minlongitude": bounding_box["minlongitude"],
-        "maxlongitude": bounding_box["maxlongitude"],
+        "minlatitude": bounding_box.get('minlatitude'),
+        "maxlatitude": bounding_box.get('maxlatitude'),
+        "minlongitude": bounding_box.get('minlongitude'),
+        "maxlongitude": bounding_box.get('maxlongitude')
     }
 
-    # 3. REQUEST THE DATA
-    # (Debug prints removed here for final submission)
-    response = requests.get(url, params=params)
-
-    if response.status_code != 200:
-        return []
-
-    # 4. PARSE DATA
     try:
-        data = response.json()
-    except Exception:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Error connecting to INGV: {e}")
         return []
 
+    data = response.json()
     events = data.get("features", [])
-    earthquakes = []
+    earthquakes_list = []
 
-    # 5. EXTRACT DATA
+    # Parsing JSON response
     for event in events:
         props = event["properties"]
         geom = event["geometry"]
 
-        timestamp = props["time"]
+        time_raw = props["time"]  # Format example: "2025-01-01T12:00:00.123Z"
 
-        # Case 1: timestamp is milliseconds (number)
-        if isinstance(timestamp, (int, float)):
-            dt = datetime.utcfromtimestamp(timestamp / 1000)
-        # Case 2: timestamp is ISO string
-        else:
-            # removing Z to ensure format matches
-            dt = datetime.fromisoformat(timestamp.replace("Z", ""))
+        if isinstance(time_raw, str):
+            clean_time = time_raw[:19]  # Strip milliseconds/Z for compatibility
+            try:
+                dt_object = datetime.fromisoformat(clean_time)
 
-        day = dt.strftime("%Y-%m-%d")
-        time_str = dt.strftime("%H:%M:%S")
+                earthquakes_list.append((
+                    dt_object.strftime("%Y-%m-%d"),
+                    dt_object.strftime("%H:%M:%S"),
+                    props["mag"],
+                    geom["coordinates"][1],  # Latitude
+                    geom["coordinates"][0],  # Longitude
+                    props["place"]
+                ))
+            except ValueError:
+                continue
 
-        mag = props["mag"]
-        place = props["place"]
-        longitude = geom["coordinates"][0]
-        latitude = geom["coordinates"][1]
+    return earthquakes_list
 
-        quake_tuple = (day, time_str, mag, latitude, longitude, place)
-        earthquakes.append(quake_tuple)
-
-    return earthquakes
