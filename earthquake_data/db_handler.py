@@ -1,13 +1,25 @@
+"""
+Database Handler Module.
+
+Manages the local SQLite database to store and retrieve earthquake data efficiently.
+"""
 import sqlite3
 from datetime import datetime, timedelta
-from .FetchINGV import gather_earthquakes
-from earthquake_data.nearby_municipalities import get_closest_municipalities
+from earthquake_data.fetch_ingv import gather_earthquakes
+#from earthquake_data.nearby_municipalities import get_closest_municipalities
 
 def create_earthquake_db(days):
-    # Call gather_earthquakes and store the result in 'earthquakes'
+    """
+    Fetches fresh data and updates the local database.
+
+    IMPORTANT: This function clears (DELETE) old data to prevent duplicates.
+
+    Args:
+        days (int): Number of days to fetch.
+    """
     earthquakes = gather_earthquakes(days)
 
-    # 2. Open a connection and a cursor to the database 'earthquakes.db'
+    # Opening a connection and a cursor to the database 'earthquakes.db'
     conn = sqlite3.connect('earthquakes.db')
     cursor = conn.cursor()
 
@@ -46,14 +58,60 @@ def query_db(K, days, min_magnitude):
     conn = sqlite3.connect('earthquakes.db')
     cursor = conn.cursor()
 
-    # Calculate the cutoff date (current time - days)
-    cutoff_date = datetime.utcnow() - timedelta(days=int(days))
+    # Creating table if it doesn't exist
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS earthquakes_db
+                   (
+                       day
+                       TEXT,
+                       time
+                       TEXT,
+                       mag
+                       REAL,
+                       latitude
+                       REAL,
+                       longitude
+                       REAL,
+                       place
+                       TEXT
+                   );
+                   """)
+
+    earthquakes = gather_earthquakes()
+    # CRITICAL FIX: Clear old data before inserting new data
+    cursor.execute("DELETE FROM earthquakes_db")
+
+    conn.commit()
+
+    # Insert new records
+    cursor.executemany("""
+                       INSERT INTO earthquakes_db (day, time, mag, latitude, longitude, place)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       """, earthquakes)
+
+    conn.commit()
+    conn.close()
+    print(f"Database updated successfully with {len(earthquakes)} events.")
+
+
+def query_db(K, days, min_magnitude):
+    """
+    Queries the database for the top K strongest earthquakes.
+
+    Args:
+        K (int): Max number of results.
+        days (int): Time range in days.
+        min_magnitude (float): Minimum magnitude threshold.
+
+    Returns:
+        list: Filtered and sorted list of earthquakes.
+    """
+    conn = sqlite3.connect('earthquakes.db')
+    cursor = conn.cursor()
+
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
     cutoff_str = cutoff_date.strftime("%Y-%m-%d")
 
-    # SQL Query:
-    # 1. Filter by magnitude and date
-    # 2. Order by magnitude DESC (strongest first)
-    # 3. Limit to K results
     query = """
             SELECT day, time, mag, latitude, longitude, place
             FROM earthquakes_db
@@ -62,29 +120,7 @@ def query_db(K, days, min_magnitude):
                 LIMIT ? \
             """
 
-    # Execute safely using parameters
-    cursor.execute(query, (float(min_magnitude), cutoff_str, int(K)))
-
+    cursor.execute(query, (min_magnitude, cutoff_str, K))
     results = cursor.fetchall()
     conn.close()
-
     return results
-
-
-def print_earthquakes(earthquakes, show_closest=False):
-    # 'earthquakes' è la lista di tuple restituita da query_db() [cite: 103, 106]
-    for eq in earthquakes:
-        # Estraiamo i dati dalla tupla in base all'ordine della query [cite: 95, 103]
-        day, time, magnitude, latitude, longitude, place = eq
-
-        # Stampiamo seguendo il formato esatto richiesto dal manuale
-        print(f"day: {day}, time: {time}, magnitude: {magnitude},")
-        print(f"lat: {latitude}, lon: {longitude}, place: {place}")
-
-        if show_closest:
-            towns = get_closest_municipalities(eq[3], eq[4])  # eq[3] is lat, eq[4] is lon
-            print("  5 Closest Municipalities:")
-            for name, d in towns:
-                print(f"    - {name}: {d:.2f} km")
-
-
