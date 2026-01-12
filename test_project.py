@@ -1,5 +1,6 @@
 """
-Test Suite for Earthquake Project.
+Test Suite for Earthquake Software.
+
 Run this file to verify the correctness of the implementation.
 """
 import unittest
@@ -20,13 +21,14 @@ class TestProject(unittest.TestCase):
         Ensure the database exists and is populated before running tests.
         """
         if not os.path.exists('earthquakes.db'):
-            # Creating a sample DB if it doesn't exist
+            # Create a sample DB if it doesn't exist
             create_earthquake_db(days=30)
 
     def test_bounding_box(self):
         """
-        Test 1: Check if key Italian cities (Padova, Palermo, Parma) 
-        fall within the configured bounding box.
+        Test 1: Check if key Italian cities fall in the bounding box.
+
+        Cities checked: Padova, Palermo, Parma.
         """
         cities = {
             "Padova": (45.4064, 11.8768),
@@ -41,9 +43,13 @@ class TestProject(unittest.TestCase):
         elif os.path.exists('earthquake_app/bounding_box.csv'):
             path = 'earthquake_app/bounding_box.csv'
         else:
-            self.fail("bounding_box.csv not found. Run write_bounding_box.py.")
+            self.fail(
+                "bounding_box.csv not found. "
+                "Run write_bounding_box.py."
+            )
+            return
 
-        with open(path, mode='r') as f:
+        with open(path, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 bbox[row['key']] = float(row['value'])
@@ -57,7 +63,7 @@ class TestProject(unittest.TestCase):
 
     def test_magnitude(self):
         """
-        Test 2: Check that there are no impossible earthquakes (mag > 9.5).
+        Test 2: Check that there are no impossible earthquakes (> 9.5).
         """
         conn = sqlite3.connect('earthquakes.db')
         cursor = conn.cursor()
@@ -68,7 +74,7 @@ class TestProject(unittest.TestCase):
 
     def test_order(self):
         """
-        Test 3: Check that query_db returns results sorted by magnitude (descending).
+        Test 3: Check that query_db returns results sorted by magnitude.
         """
         results = query_db(K=10, days=365, min_magnitude=0.0)
 
@@ -78,14 +84,19 @@ class TestProject(unittest.TestCase):
         for i in range(len(results) - 1):
             mag_curr = results[i][2]
             mag_next = results[i + 1][2]
-            self.assertGreaterEqual(mag_curr, mag_next, "Results are not sorted!")
+            self.assertGreaterEqual(
+                mag_curr, mag_next, "Results are not sorted!"
+            )
 
     def test_impossible_magnitude(self):
         """
         Test 4: Verifies that asking for Magnitude 10.0 returns empty.
         """
         results = query_db(10, 30, 10.0)
-        self.assertEqual(len(results), 0, "Querying for magnitude 10.0 should return no results.")
+        self.assertEqual(
+            len(results), 0,
+            "Querying for magnitude 10.0 should return no results."
+        )
 
 
 if __name__ == '__main__':
